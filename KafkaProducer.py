@@ -1,20 +1,28 @@
-from kafka import KafkaConsumer
-from time import sleep
-from json import loads, dumps
-from s3fs import S3FileSystem
+pip install kafka-python
 
-# Initialize a Kafka consumer for the topic 'demo_test' with the specified server and deserialization settings
-consumer = KafkaConsumer(
-    'demo_test',
-    bootstrap_servers=[':9092'],  # Replace with your server's IP
-    value_deserializer=lambda x: loads(x.decode('utf-8'))
+import pandas as pd
+from kafka import KafkaProducer
+from time import sleep
+from json import dumps
+
+# Set up a Kafka producer with specified server settings and data serialization
+producer = KafkaProducer(
+    bootstrap_servers=[':9092'],  # Update this with your server's IP
+    value_serializer=lambda x: dumps(x).encode('utf-8')
 )
 
-# Set up an S3 file system instance
-s3 = S3FileSystem()
+# Send a sample message to the Kafka topic 'demo_test'
+producer.send('demo_test', value={'sample_key': 'sample_value'})
 
-# Consume messages from the Kafka topic and save them to S3 as JSON files
-for count, message in enumerate(consumer):
-    s3_file_path = f"s3://kafka-stock-market-tutorial-youtube-darshil/stock_market_{count}.json"
-    with s3.open(s3_file_path, 'w') as file:
-        json.dump(message.value, file)
+# Load the dataset from a CSV file
+df = pd.read_csv("data/indexProcessed.csv")
+df.head()  # Display the first few rows of the dataframe
+
+# Continuously produce and send random rows from the dataset as messages to Kafka
+while True:
+    random_row = df.sample(1).to_dict(orient="records")[0]  # Select a random row and convert it to a dictionary
+    producer.send('demo_test', value=random_row)  # Send the random row to the 'demo_test' topic
+    sleep(1)  # Pause for 1 second before sending the next message
+
+# Ensure all messages are sent
+producer.flush()
